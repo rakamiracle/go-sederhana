@@ -1,7 +1,3 @@
-// ============================================
-// UPDATE FILE: handlers.go
-// ============================================
-
 package main
 
 import (
@@ -24,16 +20,15 @@ type Pagination struct {
 	TotalPages int   `json:"total_pages"`
 }
 
-// GET semua produk dengan pagination
+// GET semua produk dengan pagination, search, filter & sorting
 func GetAllProduk(c *gin.Context) {
 	var produk []Produk
 	var total int64
 	
-	// Ambil parameter page & limit dari query
+	// ===== PAGINATION =====
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	
-	// Validasi page & limit
 	if page < 1 {
 		page = 1
 	}
@@ -41,22 +36,67 @@ func GetAllProduk(c *gin.Context) {
 		limit = 10
 	}
 	
-	// Hitung offset
 	offset := (page - 1) * limit
 	
-	// Count total data
-	DB.Model(&Produk{}).Count(&total)
+	// ===== QUERY BUILDER =====
+	query := DB.Model(&Produk{})
 	
-	// Ambil data dengan limit & offset
-	DB.Limit(limit).Offset(offset).Find(&produk)
+	// ===== SEARCH (cari di nama produk) =====
+	if search := c.Query("search"); search != "" {
+		query = query.Where("nama LIKE ?", "%"+search+"%")
+	}
 	
-	// Hitung total pages
+	// ===== FILTER BY KATEGORI =====
+	if kategori := c.Query("kategori"); kategori != "" {
+		query = query.Where("kategori = ?", kategori)
+	}
+	
+	// ===== FILTER BY HARGA (min & max) =====
+	if minHarga := c.Query("min_harga"); minHarga != "" {
+		query = query.Where("harga >= ?", minHarga)
+	}
+	if maxHarga := c.Query("max_harga"); maxHarga != "" {
+		query = query.Where("harga <= ?", maxHarga)
+	}
+	
+	// ===== FILTER BY STOK =====
+	if minStok := c.Query("min_stok"); minStok != "" {
+		query = query.Where("stok >= ?", minStok)
+	}
+	
+	// ===== SORTING =====
+	sortBy := c.DefaultQuery("sort", "id")
+	order := c.DefaultQuery("order", "asc")
+	
+	// Validasi sort field
+	allowedSorts := map[string]bool{
+		"id": true, "nama": true, "harga": true, 
+		"stok": true, "created_at": true,
+	}
+	if !allowedSorts[sortBy] {
+		sortBy = "id"
+	}
+	
+	// Validasi order
+	if order != "asc" && order != "desc" {
+		order = "asc"
+	}
+	
+	query = query.Order(sortBy + " " + order)
+	
+	// ===== COUNT TOTAL =====
+	query.Count(&total)
+	
+	// ===== GET DATA =====
+	query.Limit(limit).Offset(offset).Find(&produk)
+	
+	// ===== HITUNG TOTAL PAGES =====
 	totalPages := int(total) / limit
 	if int(total)%limit > 0 {
 		totalPages++
 	}
 	
-	// Response dengan pagination
+	// ===== RESPONSE =====
 	c.JSON(http.StatusOK, PaginationResponse{
 		Status: "success",
 		Data:   produk,
