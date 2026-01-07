@@ -8,5 +8,6 @@ type Produk struct {
 	Harga     int       `json:"harga" binding:"required"`
 	Stok      int       `json:"stok" binding:"required"`
 	Kategori  string    `json:"kategori"`
+	ImageURL  string    `json:"image_url"`
 	CreatedAt time.Time `json:"created_at"`
 }

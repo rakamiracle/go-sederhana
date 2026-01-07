@@ -18,6 +18,9 @@ func main() {
 	// Setup router
 	r := gin.Default()
 	
+	// ===== SERVE STATIC FILES (untuk akses gambar) =====
+	r.Static("/uploads", "./uploads")
+	
 	// Routes PUBLIC (tidak perlu login)
 	public := r.Group("/api")
 	{
@@ -41,6 +44,10 @@ func main() {
 		protected.POST("/produk", CreateProduk)
 		protected.PUT("/produk/:id", UpdateProduk)
 		protected.DELETE("/produk/:id", DeleteProduk)
+		
+		// ===== UPLOAD GAMBAR PRODUK =====
+		protected.POST("/produk/:id/upload", UploadProdukImage)
+		protected.DELETE("/produk/:id/image", DeleteProdukImage)
 	}
 	
 	// Routes ADMIN ONLY
