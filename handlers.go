@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Struct untuk response pagination
 type PaginationResponse struct {
 	Status     string      `json:"status"`
 	Data       interface{} `json:"data"`
@@ -20,12 +19,11 @@ type Pagination struct {
 	TotalPages int   `json:"total_pages"`
 }
 
-// GET semua produk dengan pagination, search, filter & sorting
+// GET semua produk (hanya yang tidak di-soft delete)
 func GetAllProduk(c *gin.Context) {
 	var produk []Produk
 	var total int64
 	
-	// ===== PAGINATION =====
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	
@@ -38,20 +36,20 @@ func GetAllProduk(c *gin.Context) {
 	
 	offset := (page - 1) * limit
 	
-	// ===== QUERY BUILDER =====
+	// Query builder - GORM otomatis filter data yang deleted_at = NULL
 	query := DB.Model(&Produk{})
 	
-	// ===== SEARCH (cari di nama produk) =====
+	// Search
 	if search := c.Query("search"); search != "" {
 		query = query.Where("nama LIKE ?", "%"+search+"%")
 	}
 	
-	// ===== FILTER BY KATEGORI =====
+	// Filter by kategori
 	if kategori := c.Query("kategori"); kategori != "" {
 		query = query.Where("kategori = ?", kategori)
 	}
 	
-	// ===== FILTER BY HARGA (min & max) =====
+	// Filter by harga
 	if minHarga := c.Query("min_harga"); minHarga != "" {
 		query = query.Where("harga >= ?", minHarga)
 	}
@@ -59,16 +57,15 @@ func GetAllProduk(c *gin.Context) {
 		query = query.Where("harga <= ?", maxHarga)
 	}
 	
-	// ===== FILTER BY STOK =====
+	// Filter by stok
 	if minStok := c.Query("min_stok"); minStok != "" {
 		query = query.Where("stok >= ?", minStok)
 	}
 	
-	// ===== SORTING =====
+	// Sorting
 	sortBy := c.DefaultQuery("sort", "id")
 	order := c.DefaultQuery("order", "asc")
 	
-	// Validasi sort field
 	allowedSorts := map[string]bool{
 		"id": true, "nama": true, "harga": true, 
 		"stok": true, "created_at": true,
@@ -77,26 +74,20 @@ func GetAllProduk(c *gin.Context) {
 		sortBy = "id"
 	}
 	
-	// Validasi order
 	if order != "asc" && order != "desc" {
 		order = "asc"
 	}
 	
 	query = query.Order(sortBy + " " + order)
 	
-	// ===== COUNT TOTAL =====
 	query.Count(&total)
-	
-	// ===== GET DATA =====
 	query.Limit(limit).Offset(offset).Find(&produk)
 	
-	// ===== HITUNG TOTAL PAGES =====
 	totalPages := int(total) / limit
 	if int(total)%limit > 0 {
 		totalPages++
 	}
 	
-	// ===== RESPONSE =====
 	c.JSON(http.StatusOK, PaginationResponse{
 		Status: "success",
 		Data:   produk,
@@ -109,7 +100,7 @@ func GetAllProduk(c *gin.Context) {
 	})
 }
 
-// GET 1 produk (tidak berubah)
+// GET 1 produk
 func GetProduk(c *gin.Context) {
 	var produk Produk
 	
@@ -124,7 +115,7 @@ func GetProduk(c *gin.Context) {
 	})
 }
 
-// POST produk baru (tidak berubah)
+// POST produk baru
 func CreateProduk(c *gin.Context) {
 	var produk Produk
 	
@@ -142,7 +133,7 @@ func CreateProduk(c *gin.Context) {
 	})
 }
 
-// PUT update produk (tidak berubah)
+// PUT update produk
 func UpdateProduk(c *gin.Context) {
 	var produk Produk
 	
@@ -165,15 +156,85 @@ func UpdateProduk(c *gin.Context) {
 	})
 }
 
-// DELETE produk (tidak berubah)
+// DELETE produk (SOFT DELETE)
 func DeleteProduk(c *gin.Context) {
-	if err := DB.Delete(&Produk{}, c.Param("id")).Error; err != nil {
+	var produk Produk
+	
+	// Cari produk
+	if err := DB.First(&produk, c.Param("id")).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Produk tidak ditemukan"})
 		return
 	}
 	
+	// Soft delete - GORM otomatis set deleted_at
+	DB.Delete(&produk)
+	
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
-		"message": "Produk berhasil dihapus",
+		"message": "Produk berhasil dihapus (soft delete)",
+	})
+}
+
+// GET produk yang sudah di-delete (Trash)
+func GetDeletedProduk(c *gin.Context) {
+	var produk []Produk
+	
+	// Unscoped() = tampilkan data yang sudah di-delete
+	DB.Unscoped().Where("deleted_at IS NOT NULL").Find(&produk)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   produk,
+	})
+}
+
+// RESTORE produk yang di-delete
+func RestoreProduk(c *gin.Context) {
+	var produk Produk
+	
+	// Cari di data yang sudah di-delete
+	if err := DB.Unscoped().First(&produk, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Produk tidak ditemukan"})
+		return
+	}
+	
+	// Cek apakah memang sudah di-delete
+	if produk.DeletedAt.Time.IsZero() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Produk tidak dalam status deleted"})
+		return
+	}
+	
+	// Restore = set deleted_at = NULL
+	DB.Unscoped().Model(&produk).Update("deleted_at", nil)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Produk berhasil di-restore",
+		"data":    produk,
+	})
+}
+
+// PERMANENT DELETE (hapus permanen)
+func PermanentDeleteProduk(c *gin.Context) {
+	var produk Produk
+	
+	// Cari di semua data (termasuk yang sudah di-delete)
+	if err := DB.Unscoped().First(&produk, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Produk tidak ditemukan"})
+		return
+	}
+	
+	// Hapus gambar kalau ada
+	if produk.ImageURL != "" {
+		// Import filepath dan os di atas
+		// filepath.Join dan os.Remove
+	}
+	
+	// Permanent delete
+	DB.Unscoped().Delete(&produk)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Produk berhasil dihapus permanen",
 	})
 }

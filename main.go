@@ -9,56 +9,52 @@ import (
 )
 
 func main() {
-	// Load .env
 	godotenv.Load()
-	
-	// Koneksi database
 	ConnectDB()
 	
-	// Setup router
 	r := gin.Default()
 	
-	// ===== SERVE STATIC FILES (untuk akses gambar) =====
+	// Serve static files
 	r.Static("/uploads", "./uploads")
 	
-	// Routes PUBLIC (tidak perlu login)
+	// Routes PUBLIC
 	public := r.Group("/api")
 	{
-		// Auth routes
 		public.POST("/register", Register)
 		public.POST("/login", Login)
 		
-		// Produk routes (bisa diakses tanpa login)
 		public.GET("/produk", GetAllProduk)
 		public.GET("/produk/:id", GetProduk)
 	}
 	
-	// Routes PROTECTED (harus login)
+	// Routes PROTECTED
 	protected := r.Group("/api")
 	protected.Use(AuthMiddleware())
 	{
-		// Profile
 		protected.GET("/profile", GetProfile)
 		
-		// Produk management (harus login)
+		// Produk management
 		protected.POST("/produk", CreateProduk)
 		protected.PUT("/produk/:id", UpdateProduk)
-		protected.DELETE("/produk/:id", DeleteProduk)
+		protected.DELETE("/produk/:id", DeleteProduk) // Soft delete
 		
-		// ===== UPLOAD GAMBAR PRODUK =====
+		// Upload
 		protected.POST("/produk/:id/upload", UploadProdukImage)
 		protected.DELETE("/produk/:id/image", DeleteProdukImage)
+		
+		// ===== TRASH MANAGEMENT =====
+		protected.GET("/produk/trash/list", GetDeletedProduk)      // Lihat trash
+		protected.POST("/produk/:id/restore", RestoreProduk)       // Restore
+		protected.DELETE("/produk/:id/permanent", PermanentDeleteProduk) // Hapus permanen
 	}
 	
-	// Routes ADMIN ONLY
+	// Routes ADMIN
 	admin := r.Group("/api/admin")
 	admin.Use(AuthMiddleware(), AdminOnly())
 	{
-		// Route khusus admin bisa ditambah di sini
 		admin.GET("/users", GetAllUsers)
 	}
 	
-	// Baca port dari .env
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
@@ -68,13 +64,8 @@ func main() {
 	r.Run(":" + port)
 }
 
-// Function untuk admin get all users
 func GetAllUsers(c *gin.Context) {
 	var users []User
 	DB.Find(&users)
-	
-	c.JSON(200, gin.H{
-		"status": "success",
-		"data":   users,
-	})
+	c.JSON(200, gin.H{"status": "success", "data": users})
 }
