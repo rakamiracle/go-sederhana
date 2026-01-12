@@ -32,8 +32,8 @@ func ConnectDB() {
 		log.Fatal("❌ Gagal konek database:", err)
 	}
 	
-	// Auto migrate - TAMBAHKAN &User{}
-	db.AutoMigrate(&Produk{}, &User{})
+	// Auto migrate - TAMBAHKAN Transaksi & TransaksiItem
+	db.AutoMigrate(&Produk{}, &User{}, &Transaksi{}, &TransaksiItem{})
 	
 	DB = db
 	log.Println("✅ Database connected")

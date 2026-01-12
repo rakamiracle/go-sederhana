@@ -14,7 +14,6 @@ func main() {
 	
 	r := gin.Default()
 	
-	// Serve static files
 	r.Static("/uploads", "./uploads")
 	
 	// Routes PUBLIC
@@ -33,19 +32,23 @@ func main() {
 	{
 		protected.GET("/profile", GetProfile)
 		
-		// Produk management
+		// Produk
 		protected.POST("/produk", CreateProduk)
 		protected.PUT("/produk/:id", UpdateProduk)
-		protected.DELETE("/produk/:id", DeleteProduk) // Soft delete
+		protected.DELETE("/produk/:id", DeleteProduk)
 		
-		// Upload
 		protected.POST("/produk/:id/upload", UploadProdukImage)
 		protected.DELETE("/produk/:id/image", DeleteProdukImage)
 		
-		// ===== TRASH MANAGEMENT =====
-		protected.GET("/produk/trash/list", GetDeletedProduk)      // Lihat trash
-		protected.POST("/produk/:id/restore", RestoreProduk)       // Restore
-		protected.DELETE("/produk/:id/permanent", PermanentDeleteProduk) // Hapus permanen
+		protected.GET("/produk/trash/list", GetDeletedProduk)
+		protected.POST("/produk/:id/restore", RestoreProduk)
+		protected.DELETE("/produk/:id/permanent", PermanentDeleteProduk)
+		
+		// ===== TRANSAKSI =====
+		protected.POST("/transaksi", CreateTransaksi)              // Buat order
+		protected.GET("/transaksi/my", GetMyTransaksi)             // Order saya
+		protected.GET("/transaksi/:id", GetTransaksi)              // Detail order
+		protected.POST("/transaksi/:id/cancel", CancelTransaksi)   // Cancel order
 	}
 	
 	// Routes ADMIN
@@ -53,6 +56,10 @@ func main() {
 	admin.Use(AuthMiddleware(), AdminOnly())
 	{
 		admin.GET("/users", GetAllUsers)
+		
+		// Transaksi management (admin)
+		admin.GET("/transaksi", GetAllTransaksi)                      // Semua transaksi
+		admin.PUT("/transaksi/:id/status", UpdateStatusTransaksi)     // Update status
 	}
 	
 	port := os.Getenv("SERVER_PORT")
